@@ -1,0 +1,20 @@
+version: '3'
+services:
+  ruby:
+    build: ./webapp/ruby
+    volumes:
+      - .:/app
+    ports:
+      - 127.0.0.1:5555:5555
+      - 127.0.0.1:7000:7000
+      - 127.0.0.1:8000:8000
+  db:
+    image: mysql:8.0
+    volumes:
+      - ./webapp/sql:/docker-entrypoint-initdb.d
+      - ./webapp/sql/conf:/etc/mysql/conf.d
+      - ./datadir:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=secret
+    ports:
+      - 127.0.0.1:3306:3306
