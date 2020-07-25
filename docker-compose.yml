@@ -25,3 +25,9 @@ services:
       - MYSQL_PASS=secret
     ports:
       - 127.0.0.1:3306:3306
+  golang:
+    image: golang:1.14.6
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: /bin/sh -c "while sleep 1000; do :; done"
