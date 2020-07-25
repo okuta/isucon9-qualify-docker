@@ -1,3 +1,50 @@
+# isucon9-qualify Docker
+[isucon9-qualify](https://github.com/isucon/isucon9-qualify)をDockerだけで(GoとMySQL無しで)動かす。
+アプリケーションはRuby。
+
+## 下準備
+```bash
+$ wget https://github.com/isucon/isucon9-qualify/releases/download/v2/bench1.zip
+$ wget https://github.com/isucon/isucon9-qualify/releases/download/v2/initial.zip
+$ unzip bench1.zip
+$ unzip initial.zip
+$ mv v3_initial_data webapp/public/upload
+$ mv v3_bench1 initial-data/images
+$ docker-compose exec golang make
+$ cd initial-data
+$ make
+```
+
+## 起動
+```bash
+$ docker-compose exec ruby /bin/bash
+```
+
+初回起動時やDBをリセットしたときは、コンテナ内で下記が必要
+```bash
+$ ./webapp/sql/init.sh
+```
+
+Ruby起動
+```bash
+$ cd webapp/ruby
+$ bundle exec rackup --port 8000 --host 0.0.0.0
+```
+
+http://localhost:8000 にアクセス
+
+## ベンチマーク
+Rubyコンテナ内で下記実行
+```bash
+$ ./bin/benchmarker
+```
+
+## 参考
+- [ローカル環境でISUCON9予選の問題を動かす : ISUCON公式Blog](http://isucon.net/archives/53805209.html)
+- [DBだけDockerを使ってISUCON9の環境構築した \- teru\_0x01\.log](https://cha-shu00.hatenablog.com/entry/2020/04/02/210125)
+
+----
+
 # isucon9-qualify
 
 ## ディレクトリ構成
