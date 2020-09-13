@@ -21,6 +21,7 @@ import (
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
+	_ "net/http/pprof"
 )
 
 const (
@@ -268,6 +269,9 @@ type resSetting struct {
 	Categories        []Category `json:"categories"`
 }
 
+var categories []Category
+var category_dict map[int]Category
+
 func init() {
 	store = sessions.NewCookieStore([]byte("abc"))
 
@@ -279,6 +283,10 @@ func init() {
 }
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
+	}()
+
 	host := os.Getenv("MYSQL_HOST")
 	if host == "" {
 		host = "127.0.0.1"
@@ -320,6 +328,8 @@ func main() {
 	defer dbx.Close()
 
 	mux := goji.NewMux()
+
+	initCategories()
 
 	// API
 	mux.HandleFunc(pat.Post("/initialize"), postInitialize)
@@ -408,15 +418,12 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 }
 
 func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err error) {
-	err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
+	category, _ = category_dict[categoryID]
 	if category.ParentID != 0 {
-		parentCategory, err := getCategoryByID(q, category.ParentID)
-		if err != nil {
-			return category, err
-		}
+		parentCategory, _ := getCategoryByID(q, category.ParentID)
 		category.ParentCategoryName = parentCategory.CategoryName
 	}
-	return category, err
+	return category, nil
 }
 
 func getConfigByName(name string) (string, error) {
@@ -490,6 +497,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
+	initCategories()
 
 	res := resInitialize{
 		// キャンペーン実施時には還元率の設定を返す。詳しくはマニュアルを参照のこと。
@@ -500,6 +508,21 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(res)
+}
+
+func initCategories() {
+	categories_ := []Category{}
+	err := dbx.Select(&categories_, "SELECT * FROM `categories`")
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	category_dict_ := map[int]Category{}
+	for _, c := range categories_ {
+		category_dict_[c.ID] = c
+	}
+	categories = categories_
+	category_dict = category_dict_
 }
 
 func getNewItems(w http.ResponseWriter, r *http.Request) {
@@ -2151,15 +2174,6 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ress.PaymentServiceURL = getPaymentServiceURL()
-
-	categories := []Category{}
-
-	err := dbx.Select(&categories, "SELECT * FROM `categories`")
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
-	}
 	ress.Categories = categories
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
