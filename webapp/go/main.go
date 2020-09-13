@@ -495,7 +495,7 @@ func getShipmentServiceURL() string {
 func getIndex(w http.ResponseWriter, r *http.Request) {
 	profiler := NewProfiler("getIndex")
 	defer profiler.Close()
-	
+
 	templates.ExecuteTemplate(w, "index.html", struct{}{})
 }
 
@@ -927,7 +927,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	profiler := NewProfiler("getTransactions")
 	defer profiler.Close()
 
-
 	user, errCode, errMsg := getUser(r)
 	if errMsg != "" {
 		outputErrorMsg(w, errCode, errMsg)
@@ -1062,32 +1061,27 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if transactionEvidence.ID > 0 {
-			shipping := Shipping{}
-			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
-			if err == sql.ErrNoRows {
-				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
-				tx.Rollback()
-				return
-			}
-			if err != nil {
-				log.Print(err)
-				outputErrorMsg(w, http.StatusInternalServerError, "db error")
-				tx.Rollback()
-				return
-			}
-			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-				ReserveID: shipping.ReserveID,
-			})
-			if err != nil {
-				log.Print(err)
-				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-				tx.Rollback()
-				return
+			itemDetail.ShippingStatus = ShippingsStatusDone
+			if transactionEvidence.Status != TransactionEvidenceStatusDone {
+				shipping := Shipping{}
+				err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
+				if err == sql.ErrNoRows {
+					fmt.Println("err")
+					outputErrorMsg(w, http.StatusNotFound, "shipping not found")
+					tx.Rollback()
+					return
+				}
+				if err != nil {
+					log.Print(err)
+					outputErrorMsg(w, http.StatusInternalServerError, "db error")
+					tx.Rollback()
+					return
+				}
+				itemDetail.ShippingStatus = shipping.Status
 			}
 
 			itemDetail.TransactionEvidenceID = transactionEvidence.ID
 			itemDetail.TransactionEvidenceStatus = transactionEvidence.Status
-			itemDetail.ShippingStatus = ssr.Status
 		}
 
 		itemDetails = append(itemDetails, itemDetail)
