@@ -729,7 +729,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		inQuery, inArgs, err = sqlx.In(
-			"SELECT * FROM `items` WHERE `status` IN (?,?) AND category_id IN (?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			"SELECT * FROM `items` WHERE `status` IN (?,?) AND category_id IN (?) AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
 			ItemStatusOnSale,
 			ItemStatusSoldOut,
 			categoryIDs,
@@ -854,7 +854,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := dbx.Select(&items,
-			"SELECT * FROM `items` WHERE `seller_id` = ? AND `status` IN (?,?,?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			"SELECT * FROM `items` WHERE `seller_id` = ? AND `status` IN (?,?,?) AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
 			userSimple.ID,
 			ItemStatusOnSale,
 			ItemStatusTrading,
@@ -960,7 +960,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := tx.Select(&items,
-			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) AND (`created_at` < ?  OR (`created_at` = ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
 			user.ID,
 			user.ID,
 			ItemStatusOnSale,
@@ -1066,7 +1066,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				shipping := Shipping{}
 				err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
 				if err == sql.ErrNoRows {
-					fmt.Println("err")
 					outputErrorMsg(w, http.StatusNotFound, "shipping not found")
 					tx.Rollback()
 					return
@@ -1479,29 +1478,41 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		tx.Rollback()
 		return
 	}
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	var shiperr error
+	var scr *APIShipmentCreateRes
+	go func() {
+		scr, shiperr = APIShipmentCreate(getShipmentServiceURL(), &APIShipmentCreateReq{
+			ToAddress:   buyer.Address,
+			ToName:      buyer.AccountName,
+			FromAddress: seller.Address,
+			FromName:    seller.AccountName,
+		})
+		wg.Done()
+	}()
+	var payerr error
+	var pstr *APIPaymentServiceTokenRes
+	go func() {
+		pstr, payerr = APIPaymentToken(getPaymentServiceURL(), &APIPaymentServiceTokenReq{
+			ShopID: PaymentServiceIsucariShopID,
+			Token:  rb.Token,
+			APIKey: PaymentServiceIsucariAPIKey,
+			Price:  targetItem.Price,
+		})
+		wg.Done()
+	}()
+	wg.Wait()
 
-	scr, err := APIShipmentCreate(getShipmentServiceURL(), &APIShipmentCreateReq{
-		ToAddress:   buyer.Address,
-		ToName:      buyer.AccountName,
-		FromAddress: seller.Address,
-		FromName:    seller.AccountName,
-	})
-	if err != nil {
-		log.Print(err)
+	if shiperr != nil {
+		log.Print(shiperr)
 		outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
 		tx.Rollback()
 		return
 	}
 
-	pstr, err := APIPaymentToken(getPaymentServiceURL(), &APIPaymentServiceTokenReq{
-		ShopID: PaymentServiceIsucariShopID,
-		Token:  rb.Token,
-		APIKey: PaymentServiceIsucariAPIKey,
-		Price:  targetItem.Price,
-	})
-	if err != nil {
-		log.Print(err)
-
+	if payerr != nil {
+		log.Print(payerr)
 		outputErrorMsg(w, http.StatusInternalServerError, "payment service is failed")
 		tx.Rollback()
 		return
