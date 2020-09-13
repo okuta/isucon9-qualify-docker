@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -286,6 +287,7 @@ func main() {
 	go func() {
 		log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
 	}()
+	mCacheUser = NewCacheUser()
 
 	host := os.Getenv("MYSQL_HOST")
 	if host == "" {
@@ -392,24 +394,59 @@ func getUser(r *http.Request) (user User, errCode int, errMsg string) {
 	if !ok {
 		return user, http.StatusNotFound, "no session"
 	}
-
-	err := dbx.Get(&user, "SELECT * FROM `users` WHERE `id` = ?", userID)
-	if err == sql.ErrNoRows {
+	userIDnum, _ := userID.(int64)
+	user, ok = mCacheUser.GetUser(userIDnum)
+	if !ok {
 		return user, http.StatusNotFound, "user not found"
-	}
-	if err != nil {
-		log.Print(err)
-		return user, http.StatusInternalServerError, "db error"
 	}
 
 	return user, http.StatusOK, ""
 }
 
-func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err error) {
+type cacheUser struct {
+	// Setが多いならsync.Mutex
+	sync.RWMutex
+	items map[int64]User
+}
+
+func NewCacheUser() *cacheUser {
+	m := make(map[int64]User)
+	c := &cacheUser{
+		items: m,
+	}
+	return c
+}
+
+func (c *cacheUser) SetUser(key int64, value User) {
+	c.Lock()
+	c.items[key] = value
+	c.Unlock()
+}
+func (c *cacheUser) UpdateUser(key int64, w http.ResponseWriter) bool {
 	user := User{}
-	err = sqlx.Get(q, &user, "SELECT * FROM `users` WHERE `id` = ?", userID)
+	err := dbx.Get(&user, "SELECT * FROM `users` where `ID` = ?", key)
 	if err != nil {
-		return userSimple, err
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return false
+	}
+	mCacheUser.SetUser(user.ID, user)
+	return true
+}
+
+func (c *cacheUser) GetUser(key int64) (User, bool) {
+	c.RLock()
+	v, found := c.items[key]
+	c.RUnlock()
+	return v, found
+}
+
+var mCacheUser = NewCacheUser()
+
+func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err error) {
+	user, ok := mCacheUser.GetUser(userID)
+	if !ok {
+		return userSimple, fmt.Errorf("user")
 	}
 	userSimple.ID = user.ID
 	userSimple.AccountName = user.AccountName
@@ -498,6 +535,17 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	initCategories()
+	mCacheUser = NewCacheUser()
+	users := []User{}
+	err = dbx.Select(&users, "SELECT * FROM `users`")
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	for _, u := range users {
+		mCacheUser.SetUser(u.ID, u)
+	}
 
 	res := resInitialize{
 		// キャンペーン実施時には還元率の設定を返す。詳しくはマニュアルを参照のこと。
@@ -2047,7 +2095,11 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
+
 	tx.Commit()
+	if ok := mCacheUser.UpdateUser(seller.ID, w); !ok {
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(resSell{ID: itemID})
@@ -2284,7 +2336,6 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Print(err)
-
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
@@ -2303,7 +2354,9 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "session error")
 		return
 	}
-
+	if ok := mCacheUser.UpdateUser(u.ID, w); !ok {
+		return
+	}
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(u)
 }
