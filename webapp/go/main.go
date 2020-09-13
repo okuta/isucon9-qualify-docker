@@ -493,10 +493,16 @@ func getShipmentServiceURL() string {
 }
 
 func getIndex(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("getIndex")
+	defer profiler.Close()
+	
 	templates.ExecuteTemplate(w, "index.html", struct{}{})
 }
 
 func postInitialize(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("postInitialize")
+	defer profiler.Close()
+
 	ri := reqInitialize{}
 
 	err := json.NewDecoder(r.Body).Decode(&ri)
@@ -574,6 +580,9 @@ func initCategories() {
 }
 
 func getNewItems(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("getNewItems")
+	defer profiler.Close()
+
 	query := r.URL.Query()
 	itemIDStr := query.Get("item_id")
 	var itemID int64
@@ -670,6 +679,9 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("getNewCategoryItems")
+	defer profiler.Close()
+
 	rootCategoryIDStr := pat.Param(r, "root_category_id")
 	rootCategoryID, err := strconv.Atoi(rootCategoryIDStr)
 	if err != nil || rootCategoryID <= 0 {
@@ -801,6 +813,9 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func getUserItems(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("getUserItems")
+	defer profiler.Close()
+
 	userIDStr := pat.Param(r, "user_id")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil || userID <= 0 {
@@ -909,6 +924,9 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func getTransactions(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("getTransactions")
+	defer profiler.Close()
+
 
 	user, errCode, errMsg := getUser(r)
 	if errMsg != "" {
@@ -1093,6 +1111,9 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 }
 
 func getItem(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("getItem")
+	defer profiler.Close()
+
 	itemIDStr := pat.Param(r, "item_id")
 	itemID, err := strconv.ParseInt(itemIDStr, 10, 64)
 	if err != nil || itemID <= 0 {
@@ -1191,6 +1212,9 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func postItemEdit(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("postItemEdit")
+	defer profiler.Close()
+
 	rie := reqItemEdit{}
 	err := json.NewDecoder(r.Body).Decode(&rie)
 	if err != nil {
@@ -1286,6 +1310,9 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 }
 
 func getQRCode(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("getQRCode")
+	defer profiler.Close()
+
 	transactionEvidenceIDStr := pat.Param(r, "transaction_evidence_id")
 	transactionEvidenceID, err := strconv.ParseInt(transactionEvidenceIDStr, 10, 64)
 	if err != nil || transactionEvidenceID <= 0 {
@@ -1342,6 +1369,8 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 }
 
 func postBuy(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("postBuy")
+	defer profiler.Close()
 	rb := reqBuy{}
 
 	err := json.NewDecoder(r.Body).Decode(&rb)
@@ -1467,7 +1496,6 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
 		tx.Rollback()
-
 		return
 	}
 
@@ -1531,6 +1559,9 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 }
 
 func postShip(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("postShip")
+	defer profiler.Close()
+
 	reqps := reqPostShip{}
 
 	err := json.NewDecoder(r.Body).Decode(&reqps)
@@ -1662,6 +1693,9 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 }
 
 func postShipDone(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("postShipDone")
+	defer profiler.Close()
+
 	reqpsd := reqPostShipDone{}
 
 	err := json.NewDecoder(r.Body).Decode(&reqpsd)
@@ -1808,6 +1842,8 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 }
 
 func postComplete(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("postComplete")
+	defer profiler.Close()
 	reqpc := reqPostComplete{}
 
 	err := json.NewDecoder(r.Body).Decode(&reqpc)
@@ -1961,6 +1997,9 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 }
 
 func postSell(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("postSell")
+	defer profiler.Close()
+
 	csrfToken := r.FormValue("csrf_token")
 	name := r.FormValue("name")
 	description := r.FormValue("description")
@@ -2114,6 +2153,9 @@ func secureRandomStr(b int) string {
 }
 
 func postBump(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("postBump")
+	defer profiler.Close()
+
 	rb := reqBump{}
 	err := json.NewDecoder(r.Body).Decode(&rb)
 	if err != nil {
@@ -2220,6 +2262,9 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 }
 
 func getSettings(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("getSettings")
+	defer profiler.Close()
+
 	csrfToken := getCSRFToken(r)
 
 	user, _, errMsg := getUser(r)
@@ -2238,6 +2283,9 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func postLogin(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("postLogin")
+	defer profiler.Close()
+
 	rl := reqLogin{}
 	err := json.NewDecoder(r.Body).Decode(&rl)
 	if err != nil {
@@ -2295,6 +2343,9 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func postRegister(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("postRegister")
+	defer profiler.Close()
+
 	rr := reqRegister{}
 	err := json.NewDecoder(r.Body).Decode(&rr)
 	if err != nil {
@@ -2362,6 +2413,9 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func getReports(w http.ResponseWriter, r *http.Request) {
+	profiler := NewProfiler("getReports")
+	defer profiler.Close()
+
 	transactionEvidences := make([]TransactionEvidence, 0)
 	err := dbx.Select(&transactionEvidences, "SELECT * FROM `transaction_evidences` WHERE `id` > 15007")
 	if err != nil {
