@@ -32,6 +32,13 @@ CREATE TABLE `items` (
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_category_id (`category_id`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4;
+ALTER TABLE `items`
+  ADD KEY `seller_id` (`seller_id`),
+  ADD KEY `seller_id2` (`seller_id`, `status`),
+  ADD KEY `buyer_id` (`buyer_id`),
+  ADD KEY `buyer_id2` (`buyer_id`, `status`),
+  ADD KEY `created_at` (`created_at`),
+  ADD KEY `created_at2` (`created_at`, `id`);
 
 DROP TABLE IF EXISTS `transaction_evidences`;
 CREATE TABLE `transaction_evidences` (
